@@ -17,7 +17,7 @@ while True:
 # Rutas de los archivos y nombre primera cabecera
 EXCEL_FILE = f"input/{userStory} - Matriz de Casos.xlsx"
 ID_HEADER = "ID de caso de prueba"
-TEMPLATE_FILE = "format/HU-XXX - Evidencia de Pruebas.docx"
+TEMPLATE_FILE = "format/Evidencia de Pruebas Template.docx"
 OUTPUT_FOLDER = "output_cases"
 
 # Crear carpeta de salida si no existe
