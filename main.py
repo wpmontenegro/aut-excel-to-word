@@ -2,7 +2,7 @@ import os
 import re
 from docxtpl import DocxTemplate
 from datetime import date
-from utils import load_clean_excel, current_date_format
+from utils import load_clean_excel, current_date_format, export_to_xray_csv
 from pathlib import Path
 
 # Datos de entrada
@@ -35,6 +35,10 @@ template = DocxTemplate(path)
 
 # Genera fecha actual
 today = current_date_format(date.today())
+
+# Exportar casos a CSV
+output_path_csv = os.path.join(OUTPUT_FOLDER, f"{userStory} - Test Case Export.csv")
+export_to_xray_csv(df, output_path_csv)
 
 # Recorrer cada fila del Excel
 for index, row in df.iterrows():
