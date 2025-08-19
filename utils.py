@@ -1,8 +1,21 @@
 import pandas as pd
-import csv, html
+import csv, html, os
 from pathlib import Path
+from datetime import date
 
-def load_clean_excel(path, search_header="ID"):
+FIRST_HEADER_EXCEL = "ID del caso"
+CUSTOM_FIELDS = {
+    "id": "ID_del_caso",
+    "requirement": "HU",
+    "steps": "Pasos",
+    "currentDate": "Fecha_actual",
+}
+MONTHS_ES = [
+    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+]
+
+def load_clean_excel(path):
     # Verificamos si existe el archivo
     path = Path(path)
     if not path.exists():
@@ -12,7 +25,9 @@ def load_clean_excel(path, search_header="ID"):
     tmp = pd.read_excel(path, header=None)
 
     # Buscar fila con el nombre de columna clave
-    header_row = tmp[tmp.eq(search_header).any(axis=1)].index[0]
+    header_row = tmp[tmp.eq(FIRST_HEADER_EXCEL).any(axis=1)].first_valid_index()
+    if header_row is None:
+        raise ValueError(f"No se encontró la cabecera con '{FIRST_HEADER_EXCEL}' en el Excel: {path}")
 
     # Volver a leer con la cabecera correcta
     df = pd.read_excel(path, header=header_row)
@@ -25,14 +40,9 @@ def load_clean_excel(path, search_header="ID"):
 
     return df
 
-def current_date_format(date):
-    months = ("Enero", "Febrero", "Marzo", "Abri", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre")
-    day = date.day
-    month = months[date.month - 1]
-    year = date.year
-    messsage = "{} de {} del {}".format(day, month, year)
 
-    return messsage
+def current_date_format(fecha: date) -> str:
+    return f"{fecha.day} de {MONTHS_ES[fecha.month - 1]} del {fecha.year}"
 
 def is_integer(valor):
     try:
@@ -48,41 +58,67 @@ def sanitize_text(text):
       # Convierte < > & en &lt; &gt; &amp;
     return html.escape(str(text))
 
-def export_to_xray_csv(df, output_csv):
-    filas = []
-
+def export_to_word(df, template, userStory, output_folder):
+    today = current_date_format(date.today())
+    # Recorrer cada fila del Excel
     for _, row in df.iterrows():
-        case_id = row["ID de caso de prueba"]
-        summary = row.get("Descripción de la prueba", "")
-        preconditions = row.get("Prerrequisitos", "")
-        expectedResult = row.get("Resultado esperado", "")
+     # Procesar pasos: separarlos por salto de línea y crear lista de dicts
+        pasos_lista = []
+        if isinstance(row[CUSTOM_FIELDS["steps"]], str):
+            # Primero filtras pasos vacíos
+            pasos_filtrados = [sanitize_text(p.strip()) for p in row[CUSTOM_FIELDS["steps"]].split("\n") if p.strip()]
+
+            # Luego se enumera ya filtrados
+            pasos_lista = [{"num": i, "desc": paso} for i, paso in enumerate(pasos_filtrados, start=1)]
+
+        # Convertir la fila en diccionario
+        contexto = {col: sanitize_text(row[col]) if isinstance(row[col], str) else row[col] 
+                    for col in df.columns if col in row}
         
-        # Dividir pasos (uno por línea) y limpiar espacios
-        pasos = [p.strip() for p in str(row.get("Pasos", "")).split("\n") if p.strip()]
-        
+        # Campos adicionales
+        contexto.update({
+            CUSTOM_FIELDS["requirement"]: userStory,
+            CUSTOM_FIELDS["currentDate"]: today,
+            CUSTOM_FIELDS["steps"]: pasos_lista
+        })
+
+        # Renderizar plantilla con los datos
+        template.render(contexto)
+
+        # Guardar documento
+        output_path = os.path.join(output_folder, f"{userStory}_{row[CUSTOM_FIELDS["id"]]} - Evidencia de Pruebas.docx")
+        template.save(output_path)
+
+        print(f"✅ Archivo generado: {output_path}")
+
+def export_to_xray_csv(df, user_story, output_folder):
+    id_col = CUSTOM_FIELDS["id"]
+    steps_col = CUSTOM_FIELDS["steps"]
+
+    filas = []
+    for _, row in df.iterrows():
+        case_id = row.get(id_col, "")
+        steps_raw = row.get(steps_col, "")
+
+        # dividir pasos por salto de línea y limpiar vacíos
+        pasos = [p.strip() for p in str(steps_raw).split("\n") if p.strip()]
+
         for i, paso in enumerate(pasos):
-            if i == 0:
-                # Primera fila del caso: incluye toda la información
-                filas.append({
-                    "TCID": case_id,
-                    "Test Summary": summary,
-                    "Test Type": "Manual",
-                    "Preconditions": preconditions,
-                    "Action": paso,
-                    "Result": expectedResult
-                })
-            else:
-                # Filas siguientes solo con el paso
-                filas.append({
-                    "TCID": case_id,
-                    "Test Summary": "",
-                    "Test Type": "",
-                    "Test Summary": "",
-                    "Action": paso,
-                    "Result": ""
-                })
-    
-    # Convertir a DataFrame final y exportar a CSV
-    df_out = pd.DataFrame(filas)
-    df_out.to_csv(output_csv, index=False, encoding="utf-8-sig", quoting=csv.QUOTE_ALL)
-    print(f"✅ Archivo CSV generado en: {output_csv}")
+            nueva_fila = {}
+            for col in df.columns:
+                if col == steps_col:
+                    nueva_fila[col] = paso
+                elif col == id_col:
+                    nueva_fila[col] = case_id
+                else:
+                    # solo en la primera fila se pone valor, después vacío
+                    nueva_fila[col] = row[col] if i == 0 else ""
+            filas.append(nueva_fila)
+
+    df_out = pd.DataFrame(filas, columns=df.columns)
+
+    os.makedirs(output_folder, exist_ok=True)
+    output_path = os.path.join(output_folder, f"{user_story} - Casos para Xray.csv")
+
+    df_out.to_csv(output_path, sep=";", index=False, encoding="utf-8", quoting=csv.QUOTE_ALL)
+    print(f"✅ CSV generado: {output_path}")
