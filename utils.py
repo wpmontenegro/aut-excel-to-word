@@ -1,5 +1,5 @@
 import pandas as pd
-import csv
+import csv, html
 from pathlib import Path
 
 def load_clean_excel(path, search_header="ID"):
@@ -40,7 +40,13 @@ def is_integer(valor):
         return True
     except ValueError:
         return False
-    
+
+
+def sanitize_text(text):
+    if pd.isna(text):
+        return ""
+      # Convierte < > & en &lt; &gt; &amp;
+    return html.escape(str(text))
 
 def export_to_xray_csv(df, output_csv):
     filas = []

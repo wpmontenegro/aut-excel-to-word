@@ -2,7 +2,7 @@ import os
 import re
 from docxtpl import DocxTemplate
 from datetime import date
-from utils import load_clean_excel, current_date_format, export_to_xray_csv
+from utils import load_clean_excel, current_date_format, export_to_xray_csv, sanitize_text
 from pathlib import Path
 
 # Datos de entrada
@@ -46,7 +46,7 @@ for index, row in df.iterrows():
     pasos_lista = []
     if isinstance(row["Pasos"], str):
         # Primero filtras pasos vacíos
-        pasos_filtrados = [p.strip() for p in row["Pasos"].split("\n") if p.strip()]
+        pasos_filtrados = [sanitize_text(p.strip()) for p in row["Pasos"].split("\n") if p.strip()]
 
         # Luego se enumera ya filtrados
         for i, paso in enumerate(pasos_filtrados, start=1):
@@ -58,7 +58,7 @@ for index, row in df.iterrows():
         "currentDate": today,
         "id": row[ID_HEADER].strip(),
         "title": row["Descripción de la prueba"],
-        "preconditions": row["Prerrequisitos"],
+        "preconditions": sanitize_text(row["Prerrequisitos"]),
         "steps": pasos_lista,
         "expectedResult": row["Resultado esperado"]
     }
