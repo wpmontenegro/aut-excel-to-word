@@ -1,14 +1,14 @@
 import pandas as pd
-import csv, html, os
+import csv, html, os, re
 from pathlib import Path
 from datetime import date
 
 FIRST_HEADER_EXCEL = "ID del caso"
 CUSTOM_FIELDS = {
-    "id": "ID_del_caso",
+    "id": "ID del caso",
     "requirement": "HU",
     "steps": "Pasos",
-    "currentDate": "Fecha_actual",
+    "currentDate": "Fecha actual",
 }
 MONTHS_ES = [
     "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -40,7 +40,6 @@ def load_clean_excel(path):
 
     return df
 
-
 def current_date_format(fecha: date) -> str:
     return f"{fecha.day} de {MONTHS_ES[fecha.month - 1]} del {fecha.year}"
 
@@ -51,12 +50,25 @@ def is_integer(valor):
     except ValueError:
         return False
 
-
 def sanitize_text(text):
     if pd.isna(text):
         return ""
       # Convierte < > & en &lt; &gt; &amp;
     return html.escape(str(text))
+
+def normalize_header(header: str) -> str:
+    return header.strip().replace(" ", "_")
+
+def clear_numeration(str: str) -> str:
+    # Quita el patrón tipo "1) " al inicio
+    return re.sub(r'^\s*\d+\)\s*', '', str).strip()
+
+def separate_steps(texto):
+    # Dividir con regex que detecta "número)"
+    partes = re.split(r'(?=\d+\))', texto.strip())
+    # Limpiar y quitar vacíos
+    pasos = [clear_numeration(p.strip()) for p in partes if p.strip()]
+    return pasos
 
 def export_to_word(df, template, userStory, output_folder):
     today = current_date_format(date.today())
@@ -64,22 +76,23 @@ def export_to_word(df, template, userStory, output_folder):
     for _, row in df.iterrows():
      # Procesar pasos: separarlos por salto de línea y crear lista de dicts
         pasos_lista = []
-        if isinstance(row[CUSTOM_FIELDS["steps"]], str):
-            # Primero filtras pasos vacíos
-            pasos_filtrados = [sanitize_text(p.strip()) for p in row[CUSTOM_FIELDS["steps"]].split("\n") if p.strip()]
+        # Primero filtras pasos vacíos
+        pasos_filtrados = separate_steps(row[CUSTOM_FIELDS["steps"]])
 
-            # Luego se enumera ya filtrados
-            pasos_lista = [{"num": i, "desc": paso} for i, paso in enumerate(pasos_filtrados, start=1)]
+        # Luego se enumera ya filtrados
+        pasos_lista = [{"num": i, "desc": paso} for i, paso in enumerate(pasos_filtrados, start=1)]
 
         # Convertir la fila en diccionario
-        contexto = {col: sanitize_text(row[col]) if isinstance(row[col], str) else row[col] 
-                    for col in df.columns if col in row}
+        contexto = {
+            normalize_header(col): sanitize_text(row[col]) if isinstance(row[col], str) else row[col]
+            for col in df.columns
+        }
         
         # Campos adicionales
         contexto.update({
-            CUSTOM_FIELDS["requirement"]: userStory,
-            CUSTOM_FIELDS["currentDate"]: today,
-            CUSTOM_FIELDS["steps"]: pasos_lista
+            normalize_header(CUSTOM_FIELDS["requirement"]): userStory,
+            normalize_header(CUSTOM_FIELDS["currentDate"]): today,
+            normalize_header(CUSTOM_FIELDS["steps"]): pasos_lista
         })
 
         # Renderizar plantilla con los datos
@@ -101,7 +114,7 @@ def export_to_xray_csv(df, user_story, output_folder):
         steps_raw = row.get(steps_col, "")
 
         # dividir pasos por salto de línea y limpiar vacíos
-        pasos = [p.strip() for p in str(steps_raw).split("\n") if p.strip()]
+        pasos = separate_steps(steps_raw)
 
         for i, paso in enumerate(pasos):
             nueva_fila = {}
