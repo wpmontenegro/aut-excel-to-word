@@ -32,8 +32,15 @@ if not path.exists():
 
 template = DocxTemplate(path)
 
-# Exportar casos como evidencia a Word
-export_to_word(df, template, requirement, OUTPUT_FOLDER)
-
-# Exportar casos a CSV
-export_to_xray_csv(df, requirement, OUTPUT_FOLDER)
+exportType = input('Seleccione el tipo de exportación (1: Evidencias en Word, 2: CSV para Jira): ').strip()
+if exportType not in ['1', '2', '3']:
+    print("Opción no válida. Saliendo del programa.")
+    exit(1)
+if exportType == '1':
+    # Exportar solo a Word
+    export_to_word(df, template, requirement, OUTPUT_FOLDER)
+    print(f"Casos exportados a Word en la carpeta: {OUTPUT_FOLDER}")
+elif exportType == '2':
+    # Exportar solo a CSV
+    export_to_xray_csv(df, requirement, OUTPUT_FOLDER)
+    print(f"Casos exportados a CSV en la carpeta: {OUTPUT_FOLDER}")
