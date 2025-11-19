@@ -8,6 +8,7 @@ CUSTOM_FIELDS = {
     "id": "ID del caso",
     "requirement": "HU",
     "steps": "Pasos",
+    "expectedResults": "Resultado esperado",
     "currentDate": "Fecha actual",
 }
 MONTHS_ES = [
@@ -107,20 +108,33 @@ def export_to_word(df, template, userStory, output_folder):
 def export_to_xray_csv(df, user_story, output_folder):
     id_col = CUSTOM_FIELDS["id"]
     steps_col = CUSTOM_FIELDS["steps"]
+    results_col = CUSTOM_FIELDS["expectedResults"]
 
     filas = []
     for _, row in df.iterrows():
         case_id = row.get(id_col, "")
         steps_raw = row.get(steps_col, "")
+        results_raw = row.get(results_col, "")
 
         # dividir pasos por salto de línea y limpiar vacíos
         pasos = separate_steps(steps_raw)
+        resultados = separate_steps(results_raw)
 
-        for i, paso in enumerate(pasos):
+        # normalizar tamaños
+        max_len = max(len(pasos), len(resultados))
+        while len(pasos) < max_len:
+            pasos.append("")
+        while len(resultados) < max_len:
+            resultados.append("")
+
+        for i in range(max_len):
             nueva_fila = {}
+
             for col in df.columns:
                 if col == steps_col:
-                    nueva_fila[col] = paso
+                    nueva_fila[col] = pasos[i]
+                elif col == results_col:
+                    nueva_fila[col] = resultados[i]
                 elif col == id_col:
                     nueva_fila[col] = case_id
                 else:
